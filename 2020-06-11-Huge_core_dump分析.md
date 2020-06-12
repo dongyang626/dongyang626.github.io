@@ -1,16 +1,31 @@
+---
+layout:     post
+title:      Huge core dump 分析
+subtitle:   未完待续
+date:       2020-06-11
+author:     Dongyang
+header-img: img/post-bg-cook.jpg
+catalog: true
+tags:
+    - 
+---
 
 ## 对Huge core dump file 产生原因的分析
 
 复盘一些cases，争取更快更准的定位问题
 
 ### 1. Background
-客户提出修改Cgroup中OOM killer的机制，由直接干掉某task，改为生成core dump，这样便于分析为何OOM了。
+客户提出修改Cgroup中，OOM killer的机制，由直接干掉某task，改为生成core dump，这样便于分析为何OOM了。
 在某次生成core dump后，客户发现core dump为上百G，而物理内存只有10几G。
 同时客户对core进行了压缩，发现压缩程序存在报错情况。
-So begin to investigate this issue~.
+So begin to investiagate this issue~.
+
 
 ### 2. Analysis 
-- 找客户要复现步骤 （客户环境很复杂，出现一次OOM要几个月，也不会把他们的APP给我们，其步骤参考意义有限）
+
+- 找客户要复现步骤 （客户环境很复杂，出现一次OOM要几个月，也不会把他们的APP给我们，所以基本不指望这个）
+- 自己尝试复现
+其步骤参考意义有限）
 - 找客户要Core文件及出现core时的/proc等信息 
 - 自己尝试复现
 
@@ -18,9 +33,10 @@ So begin to investigate this issue~.
 由于客户不提供他们的APP，所以GDB意义有限。加载后，提示文件长度与预期不一致（由此说明该core生成时出了问题）。
 客户有一套完整的dump流程，除了core外还有proc, kernel config 等等信息会一并dump出来，然鹅，此次dump出来的东西，只有一个不完整的core，其他均无。。。
 
-#### 2.2 自己复现
+#### 2.12 自己复现
 
 测试代码如下
+
 ```
 #include <stdlib.h>
 #include <stdio.h>
@@ -49,22 +65,31 @@ int main(int argc, char **argv)
     return 0;
 }
 ```
+
 在Cgroup中设置memory limit为20MB，观察core dump文件大小。
 同时在非cgroup环境中，用'kill -6 PID' 的方式生成core dump 做对比观察
 通过du -h 观察core dump size。
 发现core dump的大小，稳定的为 实际获得的物理内存的大小+1M(左右).
 不存在huge core dump 的情况。 
+
 ** 至此，复现失败。**
 
 ### 3. Analysis again
-- Read source code
-从原理上分析分析，为什么会huge。 但generate core dump，这部分是kernel代码(未改动)，先不怀疑这部分代码有问题。
-- 查看core dump文件本身
- Elf文件的内容应该是按一定格式组织的，虽然GDB可能读不了，但硬刚 core dump 本身，会不会有什么发现？
+
+1. GDB 分析huge core dump 
+可以向客户要他们的core dump, 但听说是残缺的,而且几百G, 估计用GDB分析不出什么（主要GDB不熟.....）
+
+2.- Read source code
+从原理上分析分析，为什么会huge。 但generate core dump，
+这部分是kernel代码(未改动)，先不怀疑这部分代码有问题。
+
+3.- 查看core dump文件本身，
+ Elf文件的内容应该是按一定格式组织的，
+虽然GDB可能读不了，但硬刚 core dump 本身，会不会有什么发现？
 
 其实目前只有一个core文件，没有APP，没有/proc信息，无法知道出现core时，系统的内存容量剩余多少，磁盘容量剩余多少，APP期望获得和实际获得的物理内存是多少，在很多信息缺少的情况下，也只有读源码和读core文件这两条路了。
 
-#### 边读代码边硬刚core dump文件
+#### 3.1 边读代码边硬刚core dump文件
 
 客户的core dump 太大， 先分析自己的core.
 **该core生成条件为，malloc 50MB，在向内存实际写入8M数据后，收到Abort信号。**
@@ -106,6 +131,16 @@ Google了下，发现即存在 ‘文件大小' > ’实际占用磁盘大小’
 文件中的空洞并不要求在磁盘上占用存储区。具体处理方式与文件系统的实现有关，当定位超出文件尾端之后写时，对于新写的数据需要分配磁盘块，但是对于原文件尾端和新开始写位置之间的部分则不需要分配磁盘块。
  
 例如：用dd if=/dev/zero of=a.out seek=1023 bs=1M count=1创建a.out文件后，用ls查看a.out的文件大小为1G，用du查看a.out文件大小为1M。
+
+### 4. root cause
+- 因为Linux的‘延时分配’策略，malloc 50MB，实际写入8MB数据的情况下，虚拟内存vma中记录是50M, 物理内存其实只分配8MB.
+- core dump 会遍历vma，完整记录下所有vma信息，对于存在物理page的情况，会将实际分配到的内存信息，写入core dump文件。
+对于没有分配物理page的情况，会在该位置写入0填充。
+- 写0的位置会成为黑洞，不占用磁盘空间（这里跟文件系统有关系，具体为何是黑洞，需要进一步看）。 
+这也是为何'ls -al' 为 50MB,  'du -h'为8MB的原因。  
+- 至于客户那里为何变为huge core file. 是因为文件被重新写(比如scp)，在写的过程中这些hole都被填充了。
+
+
 
 更准确的描述为，Linux支持稀疏文件系统Sparse filesystem，所以允许这样的文件存在。
 通过阅读源码，证明了这点。
@@ -161,8 +196,14 @@ Type           Offset             VirtAddr           PhysAddr
 如何monitor glibc里标准函数的一些行为动作？ 比如如何监控 malloc函数 是否触发了abort?
 
 
-### 待记录 core dump的 soure code，core dump elf格式 相关的学习
+### 待记录下 core dump的 source code和，core dump的学习
+
+
+
+
+
+ elf格式 相关的学习
 ### 待记录如何监控库函数
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbLTM2NDYzOTU4MV19
+eyJoaXN0b3J5IjpbMTAzNzU3MzA4NSwtMzY0NjM5NTgxXX0=
 -->
