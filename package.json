@@ -26,3 +26,6 @@
         "cafe"   : "git co gitcafe-pages; git merge master; git push gitcafe gitcafe-pages:gitcafe-pages --tag; git co master;"
     }
 }
+<!--stackedit_data:
+eyJoaXN0b3J5IjpbLTExMTA3MDYxM119
+-->
