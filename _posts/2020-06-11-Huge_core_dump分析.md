@@ -6,8 +6,8 @@ date:       2020-06-11
 author:     Dongyang
 header-img: img/post-bg-cook.jpg
 catalog: true
-tags: Kernel Linux
-    - 
+tags:
+    - Kernel
 ---
 
 ## 对Huge core dump file 产生原因的分析
