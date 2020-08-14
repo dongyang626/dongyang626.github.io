@@ -1,13 +1,13 @@
 ---
 layout:     post
-title:      Huge core dump 分析
-subtitle:   复盘一些cases，争取更快更准的定位问题
-date:       2020-06-11
+title:      读者投稿
+subtitle:   心随意动，有感而发
+date:       2020-08-14
 author:     Dongyang
 header-img: img/post-bg-cook.jpg
 catalog: true
 tags:
-    - Kernel
+    - Others
 ---
 
 <p>不知道为什么，总感觉想写点什么， 不写不快!</p>
