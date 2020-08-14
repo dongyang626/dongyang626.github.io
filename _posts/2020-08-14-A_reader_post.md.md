@@ -1,21 +1,15 @@
 ---
-
-
+layout:     post
+title:      Huge core dump 分析
+subtitle:   复盘一些cases，争取更快更准的定位问题
+date:       2020-06-11
+author:     Dongyang
+header-img: img/post-bg-cook.jpg
+catalog: true
+tags:
+    - Kernel
 ---
 
-<hr>
-<p>layout: post<br>
-title: 1s 提升Git clone Github 速度<br>
-subtitle: 简单、快速<br>
-date: 2020-06-15<br>
-author: Dongyang<br>
-header-img: img/post-bg-cook.jpg<br>
-catalog: true<br>
-tags:</p>
-<ul>
-<li>Git</li>
-</ul>
-<hr>
 <p>不知道为什么，总感觉想写点什么， 不写不快!</p>
 <p>关注公众号，进星球， 有些天了。  看到了形形色色的人和问题。<br>
 虽然自己还称不上其中一员， 但总想像居委会大妈一样，热心（多管闲事）的说上几句~</p>
